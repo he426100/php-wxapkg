@@ -28,6 +28,13 @@ final class ScanCommand extends Command
                 'r',
                 InputOption::VALUE_OPTIONAL,
                 'The wechat path'
+            )
+            ->addOption(
+                'speed',
+                't',
+                InputOption::VALUE_OPTIONAL,
+                'scan speed',
+                0
             );
     }
 
@@ -37,12 +44,14 @@ final class ScanCommand extends Command
         if (empty($root)) {
             $root = path_join(get_home(), 'Documents/WeChat Files/Applet');
         }
+        $speed = (int)$input->getOption('speed');
 
         $regAppId = '/(wx[0-9a-f]{16})/';
         $files = iterator_to_array(new \FilesystemIterator($root));
         uasort($files, fn($a, $b) => $b->getMTime() - $a->getMTime());
         $wxidInfos = [];
 
+        $sleep = $speed > 0 ? fn() => sleep($speed) : fn() => null;
         foreach ($files as $file) {
             if (!$file instanceof \SplFileInfo || !$file->isDir() || !preg_match($regAppId, $file->getFilename())) {
                 continue;
@@ -61,7 +70,7 @@ final class ScanCommand extends Command
             }
             $wxidInfos[] = $info;
 
-            sleep(3);
+            $sleep();
         }
 
         $tui = new ScanTUI($wxidInfos);

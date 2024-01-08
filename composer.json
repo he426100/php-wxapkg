@@ -1,0 +1,31 @@
+{
+    "autoload": {
+        "psr-4": {
+            "App\\": "app/"
+        },
+        "files": [
+            "app/functions.php"
+        ]
+    },
+    "require-dev": {
+        "phpstan/phpstan": "^1.9",
+        "pestphp/pest": "^2.28"
+    },
+    "require": {
+        "php": ">=8.1",
+        "symfony/console": "^6.2",
+        "psy/psysh": "^0.11.10",
+        "guzzle/guzzle": "^3.8",
+        "php-tui/php-tui": "^0.1.0",
+        "guzzlehttp/guzzle": "^7.8"
+    },
+    "scripts": {
+        "analyse": "@php vendor/bin/phpstan analyse --memory-limit 512M -l 0 -c phpstan.neon ./app",
+        "test": "php ./vendor/bin/pest --colors=auto"
+    },
+    "config": {
+        "allow-plugins": {
+            "pestphp/pest-plugin": true
+        }
+    }
+}

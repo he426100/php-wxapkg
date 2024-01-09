@@ -1,0 +1,10 @@
+{
+    "alias": "wxapkg.phar",
+    "blacklist": [
+        ".history",
+        "bin",
+        "runtime"
+    ],
+    "force-autodiscovery": true,
+    "output": "bin/app.phar"
+}

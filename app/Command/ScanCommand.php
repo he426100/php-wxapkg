@@ -7,6 +7,15 @@ namespace App\Command;
 use App\Utils\ScanTUI;
 use App\Utils\WxidInfo;
 use App\Utils\WxidQuery;
+use PhpTui\Term\Actions;
+use PhpTui\Term\ClearType;
+use PhpTui\Term\Event\CharKeyEvent;
+use PhpTui\Term\Event\CodedKeyEvent;
+use PhpTui\Term\KeyCode;
+use PhpTui\Term\KeyModifiers;
+use PhpTui\Term\Terminal;
+use PhpTui\Tui\Bridge\PhpTerm\PhpTermBackend;
+use PhpTui\Tui\DisplayBuilder;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\ArgvInput;
 use Symfony\Component\Console\Input\InputOption;
@@ -73,9 +82,49 @@ final class ScanCommand extends Command
             $sleep();
         }
 
-        $tui = new ScanTUI($wxidInfos);
-        $tui->render();
+        $terminal = Terminal::new();
+        $display = DisplayBuilder::default(PhpTermBackend::new($terminal))->build();
 
+        try {
+            // enable "raw" mode to remove default terminal behavior (e.g.
+            // echoing key presses)
+            // hide the cursor
+            $terminal->execute(Actions::cursorHide());
+            // switch to the "alternate" screen so that we can return the user where they left off
+            $terminal->execute(Actions::alternateScreenEnable());
+            $terminal->execute(Actions::enableMouseCapture());
+            $terminal->enableRawMode();
+
+            $tui = new ScanTUI($wxidInfos);
+            while(1) {
+                while (null !== $event = $terminal->events()->next()) {
+                    if ($event instanceof CharKeyEvent) {
+                        if ($event->char === 'q') {
+                        break 2;
+                        }
+                    }
+                    if ($event instanceof CodedKeyEvent) {
+                        if ($event->code === KeyCode::Esc) {
+                        // do something
+                        }
+                    }
+                    $tui->handle($event);
+                }
+        
+                $display->draw($tui->build());
+
+                // sleep for Xms - note that it's encouraged to implement apps
+                // using an async library such as Amp or React
+                usleep(50_000);
+            }
+        } finally {
+            $terminal->disableRawMode();
+            $terminal->execute(Actions::disableMouseCapture());
+            $terminal->execute(Actions::alternateScreenDisable());
+            $terminal->execute(Actions::cursorShow());
+            $terminal->execute(Actions::clear(ClearType::All));
+        }
+        
         return 0;
     }
 }

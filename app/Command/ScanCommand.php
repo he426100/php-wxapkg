@@ -86,7 +86,7 @@ final class ScanCommand extends Command
 
             while (1) {
                 $table->setData($wxidInfos);
-                $gauge->setData(new Download($count, $count - $i));
+                $gauge->setData(new Download($count, $count - max($i, 0)));
                 while (null !== $event = $terminal->events()->next()) {
                     if ($event instanceof CharKeyEvent) {
                         if ($event->char === 'q') {

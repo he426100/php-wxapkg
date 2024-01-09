@@ -62,7 +62,7 @@ final class ScanCommand extends Command
 
         $regAppId = '/(wx[0-9a-f]{16})/';
         $files = iterator_to_array(new \FilesystemIterator($root), false);
-        uasort($files, fn ($a, $b) => $b->getMTime() - $a->getMTime());
+        uasort($files, fn ($a, $b) => $a->getMTime() - $b->getMTime());
         $wxidInfos = [];
 
         $sleep = $speed > 0 ? fn () => sleep($speed) : fn () => null;

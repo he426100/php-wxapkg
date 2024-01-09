@@ -22,17 +22,24 @@ use PhpTui\Tui\Text\Title;
 use PhpTui\Tui\Widget\Borders;
 use PhpTui\Tui\Widget\Widget;
 
-class ScanTUI
+final class Table
 {
     /** @var WxidInfo[] */
     private array $wxidInfo;
     private int $selected = 0;
     private TableState $state;
 
-    public function __construct(array $wxidInfo)
+    public function __construct()
     {
-        $this->wxidInfo = $wxidInfo;
         $this->state = new TableState();
+    }
+
+    public function setData(array $wxidInfo)
+    {
+        if (!isset($wxidInfo[$this->selected])) {
+            $this->selected = 0;
+        }
+        $this->wxidInfo = $wxidInfo;
     }
 
     public function build(): Widget
@@ -45,8 +52,8 @@ class ScanTUI
                     ->highlightStyle(Style::default()->black()->onCyan())
                     ->widths(
                         Constraint::percentage(10),
-                        Constraint::min(10),
-                        Constraint::min(10),
+                        Constraint::min(30),
+                        Constraint::min(30),
                         Constraint::min(50),
                     )
                     ->header(

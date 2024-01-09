@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace App\Command;
 
-use App\Utils\ScanTUI;
+use App\Utils\Download;
+use App\Utils\Gauge;
+use App\Utils\Table;
 use App\Utils\WxidInfo;
 use App\Utils\WxidQuery;
 use PhpTui\Term\Actions;
@@ -16,6 +18,9 @@ use PhpTui\Term\KeyModifiers;
 use PhpTui\Term\Terminal;
 use PhpTui\Tui\Bridge\PhpTerm\PhpTermBackend;
 use PhpTui\Tui\DisplayBuilder;
+use PhpTui\Tui\Extension\Core\Widget\GridWidget;
+use PhpTui\Tui\Widget\Direction;
+use PhpTui\Tui\Layout\Constraint;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\ArgvInput;
 use Symfony\Component\Console\Input\InputOption;
@@ -56,31 +61,11 @@ final class ScanCommand extends Command
         $speed = (int)$input->getOption('speed');
 
         $regAppId = '/(wx[0-9a-f]{16})/';
-        $files = iterator_to_array(new \FilesystemIterator($root));
-        uasort($files, fn($a, $b) => $b->getMTime() - $a->getMTime());
+        $files = iterator_to_array(new \FilesystemIterator($root), false);
+        uasort($files, fn ($a, $b) => $b->getMTime() - $a->getMTime());
         $wxidInfos = [];
 
-        $sleep = $speed > 0 ? fn() => sleep($speed) : fn() => null;
-        foreach ($files as $file) {
-            if (!$file instanceof \SplFileInfo || !$file->isDir() || !preg_match($regAppId, $file->getFilename())) {
-                continue;
-            }
-
-            $wxid = preg_replace_callback($regAppId, function ($matches) {
-                return $matches[1];
-            }, $file->getFilename());
-
-            /** @var WxidInfo */
-            $info = WxidQuery::query($wxid);
-            $info->location = $file->getPathname();
-            $info->wxid = $wxid;
-            if ($info->error) {
-                break;
-            }
-            $wxidInfos[] = $info;
-
-            $sleep();
-        }
+        $sleep = $speed > 0 ? fn () => sleep($speed) : fn () => null;
 
         $terminal = Terminal::new();
         $display = DisplayBuilder::default(PhpTermBackend::new($terminal))->build();
@@ -95,24 +80,59 @@ final class ScanCommand extends Command
             $terminal->execute(Actions::enableMouseCapture());
             $terminal->enableRawMode();
 
-            $tui = new ScanTUI($wxidInfos);
-            while(1) {
+            $i = $count = count($files);
+            $table = new Table();
+            $gauge = new Gauge();
+
+            while (1) {
+                $table->setData($wxidInfos);
+                $gauge->setData(new Download($count, $count - $i));
                 while (null !== $event = $terminal->events()->next()) {
                     if ($event instanceof CharKeyEvent) {
                         if ($event->char === 'q') {
-                        break 2;
+                            break 2;
                         }
                     }
                     if ($event instanceof CodedKeyEvent) {
                         if ($event->code === KeyCode::Esc) {
-                        // do something
+                            // do something
                         }
                     }
-                    $tui->handle($event);
+                    $table->handle($event);
                 }
-        
-                $display->draw($tui->build());
 
+                $display->draw(GridWidget::default()
+                    ->direction(Direction::Vertical)
+                    ->constraints(
+                        Constraint::min(40),
+                        Constraint::min(0),
+                    )
+                    ->widgets(
+                        $table->build(),
+                        $gauge->build(),
+                    ));
+
+                while ($i-- > -1) {
+                    $file = $files[$i];
+                    if (!$file instanceof \SplFileInfo || !$file->isDir() || !preg_match($regAppId, $file->getFilename())) {
+                        continue;
+                    }
+
+                    $wxid = preg_replace_callback($regAppId, function ($matches) {
+                        return $matches[1];
+                    }, $file->getFilename());
+
+                    /** @var WxidInfo */
+                    $info = WxidQuery::query($wxid);
+                    $info->location = $file->getPathname();
+                    $info->wxid = $wxid;
+                    if ($info->error) {
+                        $i++;
+                        break;
+                    }
+                    $wxidInfos[] = $info;
+                    $sleep();
+                }
                 // sleep for Xms - note that it's encouraged to implement apps
                 // using an async library such as Amp or React
                 usleep(50_000);
@@ -124,7 +144,7 @@ final class ScanCommand extends Command
             $terminal->execute(Actions::cursorShow());
             $terminal->execute(Actions::clear(ClearType::All));
         }
-        
+
         return 0;
     }
 }

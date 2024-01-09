@@ -65,16 +65,17 @@ final class Table
                         )
                     )
                     ->rows(...array_map(function (WxidInfo $info) {
+                        $desc = $info->error ?: $info->description;
                         return TableRow::fromCells(
                             TableCell::fromString($info->appid ?: $info->wxid,),
                             TableCell::fromString($info->nickname),
                             TableCell::fromString($info->principal_name),
-                            TableCell::fromString($info->error ?: $info->description),
+                            TableCell::fromString(mb_substr($desc, 0, 30) . (mb_strlen($desc) > 30 ? '...' : '')),
                         );
                     }, $this->wxidInfo))
             )
         ;
-    }  
+    }
 
     public function handle(Event $event): void
     {

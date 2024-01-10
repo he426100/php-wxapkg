@@ -2,8 +2,9 @@
 
 declare(strict_types=1);
 
-namespace App\Utils;
+namespace App\Utils\Tui;
 
+use App\Utils\WxidInfo;
 use PhpTui\Term\Event;
 use PhpTui\Term\Event\CodedKeyEvent;
 use PhpTui\Term\KeyCode;
@@ -42,6 +43,21 @@ final class Table
         $this->wxidInfo = $wxidInfo;
     }
 
+    public function key(): int
+    {
+        return $this->selected;
+    }
+
+    public function current(): ?WxidInfo
+    {
+        return $this->wxidInfo[$this->selected] ?? null;
+    }
+
+    public function count(): int
+    {
+        return count($this->wxidInfo);
+    }
+
     public function build(): Widget
     {
         return BlockWidget::default()->titles(Title::fromString('Table'))->borders(Borders::ALL)
@@ -52,8 +68,8 @@ final class Table
                     ->highlightStyle(Style::default()->black()->onCyan())
                     ->widths(
                         Constraint::percentage(10),
-                        Constraint::min(30),
-                        Constraint::min(30),
+                        Constraint::min(35),
+                        Constraint::min(35),
                         Constraint::min(50),
                     )
                     ->header(
@@ -65,29 +81,28 @@ final class Table
                         )
                     )
                     ->rows(...array_map(function (WxidInfo $info) {
-                        $desc = $info->error ?: $info->description;
                         return TableRow::fromCells(
                             TableCell::fromString($info->appid ?: $info->wxid,),
-                            TableCell::fromString($info->nickname),
-                            TableCell::fromString($info->principal_name),
-                            TableCell::fromString(mb_substr($desc, 0, 30) . (mb_strlen($desc) > 30 ? '...' : '')),
+                            TableCell::fromString(text_ellipsis($info->nickname, 15)),
+                            TableCell::fromString(text_ellipsis($info->principal_name, 15)),
+                            TableCell::fromString(text_ellipsis($info->error ?: $info->description, 40)),
                         );
                     }, $this->wxidInfo))
-            )
-        ;
+            );
     }
 
     public function handle(Event $event): void
     {
         if ($event instanceof CodedKeyEvent) {
-            if ($event->code === KeyCode::Down) {
-                $this->selected++;
-            }
-            if ($event->code === KeyCode::Up) {
-                if ($this->selected > 0) {
-                    $this->selected--;
-                }
-            }
+            $this->selected = match ($event->code) {
+                KeyCode::Down => min($this->selected + 1, count($this->wxidInfo) - 1),
+                KeyCode::Up => max(0, $this->selected - 1),
+                KeyCode::Home => 0,
+                KeyCode::End => count($this->wxidInfo) - 1,
+                KeyCode::PageUp => max(0, $this->selected - 10),
+                KeyCode::PageDown => min($this->selected + 10, count($this->wxidInfo) - 1),
+                default => $this->selected,
+            };
         }
     }
 }

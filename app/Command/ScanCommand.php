@@ -4,9 +4,10 @@ declare(strict_types=1);
 
 namespace App\Command;
 
-use App\Utils\Download;
-use App\Utils\Gauge;
-use App\Utils\Table;
+use App\Utils\Tui\Download;
+use App\Utils\Tui\Gauge;
+use App\Utils\Tui\Table;
+use App\Utils\Tui\Text;
 use App\Utils\WxidInfo;
 use App\Utils\WxidQuery;
 use PhpTui\Term\Actions;
@@ -44,10 +45,10 @@ final class ScanCommand extends Command
                 'The wechat path'
             )
             ->addOption(
-                'speed',
+                'wait',
                 't',
                 InputOption::VALUE_OPTIONAL,
-                'scan speed',
+                'scan wait',
                 0
             );
     }
@@ -58,35 +59,37 @@ final class ScanCommand extends Command
         if (empty($root)) {
             $root = path_join(get_home(), 'Documents/WeChat Files/Applet');
         }
-        $speed = (int)$input->getOption('speed');
+        $wait = (int)$input->getOption('wait');
 
         $regAppId = '/(wx[0-9a-f]{16})/';
         $files = iterator_to_array(new \FilesystemIterator($root), false);
         uasort($files, fn ($a, $b) => $a->getMTime() - $b->getMTime());
         $wxidInfos = [];
 
-        $sleep = $speed > 0 ? fn () => sleep($speed) : fn () => null;
-
+        $query = new WxidQuery();
         $terminal = Terminal::new();
         $display = DisplayBuilder::default(PhpTermBackend::new($terminal))->build();
 
         try {
-            // enable "raw" mode to remove default terminal behavior (e.g.
-            // echoing key presses)
             // hide the cursor
-            $terminal->execute(Actions::cursorHide());
+            // $terminal->execute(Actions::cursorHide());
             // switch to the "alternate" screen so that we can return the user where they left off
             $terminal->execute(Actions::alternateScreenEnable());
-            $terminal->execute(Actions::enableMouseCapture());
+            // $terminal->execute(Actions::enableMouseCapture());
+            // enable "raw" mode to remove default terminal behavior (e.g.
+            // echoing key presses)
             $terminal->enableRawMode();
 
             $i = $count = count($files);
             $table = new Table();
             $gauge = new Gauge();
+            $text = new Text();
 
             while (1) {
                 $table->setData($wxidInfos);
-                $gauge->setData(new Download($count, $count - max($i, 0)));
+                $gauge->setData(new Download($table->count(), $table->key() + 1));
+                $text->setData((string)$table->current());
+
                 while (null !== $event = $terminal->events()->next()) {
                     if ($event instanceof CharKeyEvent) {
                         if ($event->char === 'q') {
@@ -104,16 +107,18 @@ final class ScanCommand extends Command
                 $display->draw(GridWidget::default()
                     ->direction(Direction::Vertical)
                     ->constraints(
-                        Constraint::min(40),
-                        Constraint::min(0),
+                        Constraint::min(5),
+                        Constraint::length(15),
+                        Constraint::length(8),
                     )
                     ->widgets(
                         $table->build(),
+                        $text->build(),
                         $gauge->build(),
                     ));
 
                 while ($i-- > -1) {
-                    $file = $files[$i];
+                    $file = $files[$i] ?? null;
                     if (!$file instanceof \SplFileInfo || !$file->isDir() || !preg_match($regAppId, $file->getFilename())) {
                         continue;
                     }
@@ -123,15 +128,15 @@ final class ScanCommand extends Command
                     }, $file->getFilename());
 
                     /** @var WxidInfo */
-                    $info = WxidQuery::query($wxid);
+                    $info = $query->query($wxid);
                     $info->location = $file->getPathname();
                     $info->wxid = $wxid;
                     if ($info->error) {
                         $i++;
+                        sleep($wait);
                         break;
                     }
                     $wxidInfos[] = $info;
-                    $sleep();
                 }
                 // sleep for Xms - note that it's encouraged to implement apps
                 // using an async library such as Amp or React
@@ -139,9 +144,9 @@ final class ScanCommand extends Command
             }
         } finally {
             $terminal->disableRawMode();
-            $terminal->execute(Actions::disableMouseCapture());
+            // $terminal->execute(Actions::disableMouseCapture());
             $terminal->execute(Actions::alternateScreenDisable());
-            $terminal->execute(Actions::cursorShow());
+            // $terminal->execute(Actions::cursorShow());
             $terminal->execute(Actions::clear(ClearType::All));
         }
 

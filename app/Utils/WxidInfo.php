@@ -30,8 +30,25 @@ class WxidInfo
         array_map(fn ($k, $v) => $this->{$k} = $v, array_keys($info), $info);
     }
 
+    public static function fromArray(array $info)
+    {
+        return new static($info);
+    }
+
     public function toJson(): string
     {
         return json_encode($this, JSON_PRETTY_PRINT);
+    }
+
+    public function __toString(): string
+    {
+        $infoArray = [];
+        foreach (get_object_vars($this) as $key => $value) {
+            if (!empty($value)) {
+                $infoArray[] = "$key: $value";
+            }
+        }
+
+        return implode("\n", $infoArray);
     }
 }
